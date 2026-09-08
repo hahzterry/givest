@@ -11,6 +11,13 @@ export type Update = {
 /** Newest first. Add a row here every time something actually ships. */
 export const UPDATES: Update[] = [
   {
+    date: "2026-09-08",
+    title: "Send from X, step one",
+    body: "Write a post like: @usegivest send this person $10 of NVDA. Paste the link on /x. We read the handle, the dollars, and the stock, and open a gift locked to that account. You confirm and send. Step two is the bot picking it up on its own. Not yet.",
+    tag: "shipped",
+    href: { label: "Try it", url: "/x" },
+  },
+  {
     date: "2026-08-27",
     title: "Share receipt after you send",
     body: "The done screen now shows the real share card and a ready post. Public drops include the claim link. Private drops keep the key out of the post so you can DM it.",

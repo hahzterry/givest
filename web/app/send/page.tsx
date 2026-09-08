@@ -174,6 +174,23 @@ export default function SendPage() {
     readEthUsd().then(setEthUsd);
   }, []);
 
+  // Prefill from /x: ?s=NVDA&u=10&to=handle
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get("s")?.toUpperCase();
+    const u = params.get("u");
+    const to = params.get("to")?.replace(/^@/, "").replace(/[^A-Za-z0-9_]/g, "");
+    if (s && STOCKS.some((st) => st.symbol === s)) setSymbol(s);
+    if (u && Number.isFinite(Number(u)) && Number(u) > 0) {
+      setAmountMode("usd");
+      setUsdInput(String(Number(u)));
+    }
+    if (to) {
+      setLockEnabled(true);
+      setLockHandle(to.slice(0, 15));
+    }
+  }, []);
+
   useEffect(() => {
     if (!queryAddress) {
       setCustomLookup({ status: "idle" });

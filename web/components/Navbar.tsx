@@ -15,6 +15,7 @@ const PRIMARY = [
 ];
 
 const MORE = [
+  { label: "Send from X", href: "/x", desc: "Paste a post. We read it." },
   { label: "Updates", href: "/updates", desc: "What shipped, with dates" },
   { label: "Gifts", href: "/gifts", desc: "What you sent, live onchain" },
   { label: "Status", href: "/status", desc: "Look up a gift onchain" },
