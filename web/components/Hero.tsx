@@ -33,46 +33,54 @@ function TokenCa() {
   );
 }
 
-function ProtocolVolume({
+function LiveNumbers({
   volumeLabel,
+  stockVolumeLabel,
   dropCount,
   ready,
 }: {
   volumeLabel: string;
+  stockVolumeLabel: string;
   dropCount: number;
   ready: boolean;
 }) {
-  if (!ready) {
-    return (
-      <p className="mt-5 text-sm text-gray-400">Reading volume from the chain…</p>
-    );
-  }
+  const show = (value: string | number) => (ready ? value : "…");
   return (
-    <p className="mt-5 text-sm text-gray-500">
-      <a href="/volume" className="font-medium text-gray-800 underline-offset-2 hover:underline">
-        {volumeLabel}
-      </a>
-      {" "}
-      sent onchain
-      {dropCount > 0 && (
-        <span className="text-gray-400"> · {dropCount} drops</span>
-      )}
-      <span className="text-gray-400"> · </span>
-      <a href="/volume" className="text-gray-400 underline-offset-2 hover:text-gray-600 hover:underline">
-        verify
-      </a>
-    </p>
+    <div className="mt-10 w-full max-w-xl">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <a href="/volume" className="rounded-2xl border border-gray-200/80 bg-white/80 px-3 py-4 text-left shadow-sm backdrop-blur-sm transition hover:border-gray-300 sm:px-4">
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">Volume</p>
+          <p className="mt-2 text-2xl font-medium tracking-tight text-gray-900 sm:text-3xl">{show(volumeLabel)}</p>
+        </a>
+        <a href="/volume" className="rounded-2xl border border-gray-200/80 bg-white/80 px-3 py-4 text-left shadow-sm backdrop-blur-sm transition hover:border-gray-300 sm:px-4">
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">Drops</p>
+          <p className="mt-2 text-2xl font-medium tracking-tight text-gray-900 sm:text-3xl">{show(dropCount)}</p>
+        </a>
+        <a href="/volume" className="rounded-2xl border border-gray-200/80 bg-white/80 px-3 py-4 text-left shadow-sm backdrop-blur-sm transition hover:border-gray-300 sm:px-4">
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">Stock</p>
+          <p className="mt-2 text-2xl font-medium tracking-tight text-gray-900 sm:text-3xl">{show(stockVolumeLabel)}</p>
+        </a>
+      </div>
+      <p className="mt-3 text-xs text-gray-400">
+        {ready ? "Live from Robinhood Chain." : "Reading the chain…"}{" "}
+        <a href="/volume" className="underline-offset-2 hover:text-gray-700 hover:underline">
+          Verify
+        </a>
+      </p>
+    </div>
   );
 }
 
 export default function Hero({
   scrollProgress,
   volumeLabel,
+  stockVolumeLabel,
   dropCount,
   ready,
 }: {
   scrollProgress: number;
   volumeLabel: string;
+  stockVolumeLabel: string;
   dropCount: number;
   ready: boolean;
 }) {
@@ -103,7 +111,12 @@ export default function Hero({
         Claimed in one click, no wallet, no gas.
       </p>
 
-      <ProtocolVolume volumeLabel={volumeLabel} dropCount={dropCount} ready={ready} />
+      <LiveNumbers
+        volumeLabel={volumeLabel}
+        stockVolumeLabel={stockVolumeLabel}
+        dropCount={dropCount}
+        ready={ready}
+      />
 
       <p className="mt-4 max-w-sm text-sm text-gray-500">
         iPhone is not out yet.{" "}

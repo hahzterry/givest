@@ -1,28 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import LogoMark from "@/components/LogoMark";
 
 const PRIMARY = [
-  { label: "Home", href: "/" },
   { label: "Send", href: "/send" },
   { label: "Claim", href: "/claim" },
-  { label: "Pool", href: "/pool" },
-  { label: "APK", href: "/android" },
-];
-
-const MORE = [
-  { label: "Send from X", href: "/x", desc: "Paste a post. We read it." },
-  { label: "Updates", href: "/updates", desc: "What shipped, with dates" },
-  { label: "Gifts", href: "/gifts", desc: "What you sent, live onchain" },
-  { label: "Status", href: "/status", desc: "Look up a gift onchain" },
-  { label: "Token", href: "/token", desc: "$GIVEST utility and fee tiers" },
-  { label: "Volume", href: "/volume", desc: "Live protocol stats" },
-  { label: "Roadmap", href: "/roadmap", desc: "What ships next" },
-  { label: "Docs", href: "/docs", desc: "How Givest works" },
 ];
 
 function XIcon({ className }: { className?: string }) {
@@ -47,12 +33,9 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
   const pathname = usePathname();
   const isPage = variant === "page";
   const [open, setOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setOpen(false);
-    setMoreOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -64,25 +47,12 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!moreOpen) return;
-    function onClick(e: MouseEvent) {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setMoreOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [moreOpen]);
-
   const isActive = (href: string) =>
     href === "/"
       ? pathname === "/"
       : href.startsWith("/") && !href.includes("#")
         ? pathname === href
         : false;
-
-  const moreActive = MORE.some((l) => isActive(l.href));
 
   return (
     <nav
@@ -110,59 +80,24 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
             </Link>
           ))}
 
-          <div ref={moreRef} className="relative">
-            <button
-              type="button"
-              aria-expanded={moreOpen}
-              onClick={() => setMoreOpen((v) => !v)}
-              className={`flex items-center gap-1 text-sm font-medium transition-colors duration-150 ${
-                moreActive || moreOpen ? "text-gray-900" : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              More
-              <ChevronDown
-                className={`h-3.5 w-3.5 transition-transform duration-150 ${moreOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-
-            {moreOpen && (
-              <div className="pop-in absolute top-full left-1/2 z-50 mt-4 w-60 -translate-x-1/2 overflow-hidden rounded-2xl border border-gray-200/80 bg-white/95 p-1.5 shadow-xl backdrop-blur-md">
-                {MORE.map(({ label, href, desc }) => (
-                  <Link
-                    key={label}
-                    href={href}
-                    onClick={() => setMoreOpen(false)}
-                    className={`block rounded-xl px-3.5 py-2.5 transition ${
-                      isActive(href) ? "bg-gray-100" : "hover:bg-gray-50"
-                    }`}
-                  >
-                    <span className="block text-sm font-medium text-gray-900">{label}</span>
-                    <span className="mt-0.5 block text-xs text-gray-400">{desc}</span>
-                  </Link>
-                ))}
-                <div className="mt-1 flex items-center gap-4 border-t border-gray-100 px-3.5 py-2.5">
-                  <a
-                    href="https://x.com/usegivest"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Follow us on X"
-                    className="text-gray-500 transition-colors hover:text-gray-900"
-                  >
-                    <XIcon />
-                  </a>
-                  <a
-                    href={GITHUB_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="View the source on GitHub"
-                    className="text-gray-500 transition-colors hover:text-gray-900"
-                  >
-                    <GitHubIcon />
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
+          <a
+            href="https://x.com/usegivest"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Follow us on X"
+            className="text-gray-500 transition-colors hover:text-gray-900"
+          >
+            <XIcon />
+          </a>
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="View the source on GitHub"
+            className="text-gray-500 transition-colors hover:text-gray-900"
+          >
+            <GitHubIcon />
+          </a>
         </div>
 
         <Link
@@ -200,23 +135,6 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
                     isActive(href)
                       ? "bg-gray-900 text-white"
                       : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  {label}
-                </Link>
-              ))}
-              <p className="mt-2 px-4 pb-1 text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">
-                More
-              </p>
-              {MORE.map(({ label, href }) => (
-                <Link
-                  key={label}
-                  href={href}
-                  onClick={() => setOpen(false)}
-                  className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                    isActive(href)
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
                   {label}
