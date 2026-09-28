@@ -19,6 +19,7 @@ export default function HomePage({ initial }: { initial: LiveStats }) {
           scrollProgress={scrollProgress}
           volumeLabel={stats.volumeLabel}
           dropCount={stats.dropCount}
+          ready={stats.ready}
         />
         <ShowcaseSection scrollProgress={scrollProgress} />
       </div>

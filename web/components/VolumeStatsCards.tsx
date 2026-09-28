@@ -12,7 +12,7 @@ export default function VolumeStatsCards({ initial }: { initial: LiveStats }) {
           Volume
         </p>
         <p className="mt-3 text-3xl font-medium tracking-tight text-gray-900">
-          {stats.volumeLabel}
+          {stats.ready ? stats.volumeLabel : "…"}
         </p>
         <p className="mt-2 text-xs text-gray-500">ETH into protocol</p>
       </div>
@@ -21,7 +21,7 @@ export default function VolumeStatsCards({ initial }: { initial: LiveStats }) {
           Drops
         </p>
         <p className="mt-3 text-3xl font-medium tracking-tight text-gray-900">
-          {stats.dropCount}
+          {stats.ready ? stats.dropCount : "…"}
         </p>
         <p className="mt-2 text-xs text-gray-500">Creates onchain</p>
       </div>
@@ -30,7 +30,7 @@ export default function VolumeStatsCards({ initial }: { initial: LiveStats }) {
           Stock locked
         </p>
         <p className="mt-3 text-3xl font-medium tracking-tight text-gray-900">
-          {stats.stockVolumeLabel}
+          {stats.ready ? stats.stockVolumeLabel : "…"}
         </p>
         <p className="mt-2 text-xs text-gray-500">Tokens in escrow events</p>
       </div>

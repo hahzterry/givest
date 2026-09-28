@@ -36,10 +36,17 @@ function TokenCa() {
 function ProtocolVolume({
   volumeLabel,
   dropCount,
+  ready,
 }: {
   volumeLabel: string;
   dropCount: number;
+  ready: boolean;
 }) {
+  if (!ready) {
+    return (
+      <p className="mt-5 text-sm text-gray-400">Reading volume from the chain…</p>
+    );
+  }
   return (
     <p className="mt-5 text-sm text-gray-500">
       <a href="/volume" className="font-medium text-gray-800 underline-offset-2 hover:underline">
@@ -62,10 +69,12 @@ export default function Hero({
   scrollProgress,
   volumeLabel,
   dropCount,
+  ready,
 }: {
   scrollProgress: number;
   volumeLabel: string;
   dropCount: number;
+  ready: boolean;
 }) {
   const opacity = Math.max(1 - scrollProgress * 2.5, 0);
   const translateY = scrollProgress * -60;
@@ -94,7 +103,7 @@ export default function Hero({
         Claimed in one click, no wallet, no gas.
       </p>
 
-      <ProtocolVolume volumeLabel={volumeLabel} dropCount={dropCount} />
+      <ProtocolVolume volumeLabel={volumeLabel} dropCount={dropCount} ready={ready} />
 
       <p className="mt-4 max-w-sm text-sm text-gray-500">
         iPhone is not out yet.{" "}

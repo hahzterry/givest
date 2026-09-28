@@ -10,7 +10,7 @@ const EXPLORER = "https://robinhoodchain.blockscout.com";
 
 export async function GET() {
   try {
-    const stats = await getProtocolStats(45_000);
+    const stats = await getProtocolStats(50_000);
     return NextResponse.json(
       {
         ...stats,
@@ -25,7 +25,7 @@ export async function GET() {
       },
       {
         headers: {
-          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+          "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30",
         },
       },
     );

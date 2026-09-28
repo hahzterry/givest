@@ -54,7 +54,7 @@ export default function StatsSection({ initial }: { initial: LiveStats }) {
                 Volume sent
               </p>
               <p className="mt-2 text-4xl font-medium tracking-tighter text-gray-900 sm:text-5xl">
-                {stats.volumeLabel}
+                {stats.ready ? stats.volumeLabel : "…"}
               </p>
               <p className="mt-1.5 text-sm text-gray-400">
                 ETH into escrow, priced live
@@ -65,7 +65,7 @@ export default function StatsSection({ initial }: { initial: LiveStats }) {
                 Drops created
               </p>
               <p className="mt-2 text-4xl font-medium tracking-tighter text-gray-900 sm:text-5xl">
-                {stats.dropCount}
+                {stats.ready ? stats.dropCount : "…"}
               </p>
               <p className="mt-1.5 text-sm text-gray-400">
                 Settled on Robinhood Chain
@@ -76,7 +76,7 @@ export default function StatsSection({ initial }: { initial: LiveStats }) {
                 Stock locked
               </p>
               <p className="mt-2 text-4xl font-medium tracking-tighter text-gray-900 sm:text-5xl">
-                {stats.stockVolumeLabel}
+                {stats.ready ? stats.stockVolumeLabel : "…"}
               </p>
               <p className="mt-1.5 text-sm text-gray-400">
                 Tokens escrowed in drops

@@ -66,12 +66,14 @@ export default async function VolumePage() {
   let volumeLabel = "$0";
   let stockVolumeLabel = "$0";
   let dropCount = 0;
+  let ready = false;
 
   try {
-    const stats = await getProtocolStats(3_000);
+    const stats = await getProtocolStats(25_000);
     volumeLabel = formatVolumeUsd(stats.volumeUsd);
     stockVolumeLabel = formatVolumeUsd(stats.stockVolumeUsd);
     dropCount = stats.dropCount;
+    ready = true;
   } catch (e) {
     console.error("[volume]", e);
   }
@@ -100,7 +102,7 @@ export default async function VolumePage() {
         </header>
 
         <VolumeStatsCards
-          initial={{ volumeLabel, stockVolumeLabel, dropCount }}
+          initial={{ volumeLabel, stockVolumeLabel, dropCount, ready }}
         />
 
         <section className="mt-10 rounded-2xl border border-gray-200/70 bg-white/95 p-6 shadow-sm sm:p-8">

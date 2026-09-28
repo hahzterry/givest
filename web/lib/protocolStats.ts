@@ -1,19 +1,37 @@
-import { formatEther, type Address } from "viem";
+import { formatEther, type Address, type Hex } from "viem";
 import { ESCROW_ADDRESSES, STOCKS, stockByAddress } from "@/lib/config";
+import { publicClient } from "@/lib/chain";
 import { readEthUsd, readUsdPrice } from "@/lib/prices";
 
-const EXPLORER = "https://robinhoodchain.blockscout.com";
+/**
+ * Volume is read from Robinhood Chain itself.
+ * Blockscout sits behind a Cloudflare challenge and was returning
+ * empty data, which the page then showed as $0.
+ *
+ * A cold server walks DropCreated logs once. After that it only asks
+ * for blocks since the last read, reprices, and keeps the previous
+ * numbers if a refresh fails.
+ */
+
+/** First block we scan. The earliest known create sits above this. */
+const SCAN_FROM_BLOCK = 8_000_000n;
+/**
+ * One address plus one topic may span 10_000_000 blocks on this RPC.
+ * Stay under that.
+ */
+const CHUNK_BLOCKS = 9_000_000n;
+const QUERY_CONCURRENCY = 16;
 
 /** DropCreated topic0 hashes across contract versions. */
-const DROP_CREATED_TOPICS = new Set([
+const DROP_CREATED_TOPICS: Hex[] = [
   "0xa2a53c81e062881c7ba3d9296436d3042e66f4c2a2a721a714e42415a2bd6718",
   "0xcb54899c00dd633981d408fc7d967edd5447f66cec4a623465e92e6548a60f3f",
   "0xb2d083359c28e01231c2b574a882fb62468cdd0d9aff0525edc5d6da513e5d7b",
-]);
+];
 
 /**
  * Extra price feeds for historical drops whose tickers are no longer
- * on the send list (deep-liquidity filter). Used only for stats.
+ * on the send list. Used only for stats.
  */
 const HISTORICAL_FEEDS: Record<string, Address> = {
   "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a":
@@ -32,216 +50,256 @@ const HISTORICAL_FEEDS: Record<string, Address> = {
     "0xfb133Fa4B7b385802B693a293606682Df47109A3", // SNDK
 };
 
-function isDropCreated(topic0: string | undefined): boolean {
-  if (!topic0) return false;
-  const t = topic0.toLowerCase();
-  if (DROP_CREATED_TOPICS.has(t)) return true;
-  return (
-    t.startsWith("0xa2a53c81") ||
-    t.startsWith("0xcb54899c") ||
-    t.startsWith("0xb2d08335")
-  );
-}
-
-type ExplorerLog = {
-  topics?: string[];
-  data?: string;
+type RpcLog = {
+  transactionHash?: Hex;
+  logIndex?: Hex;
+  blockNumber?: Hex;
+  topics?: Hex[];
+  data?: Hex;
 };
 
-/** Per-request timeout so a slow explorer can never hang SSR. */
-const FETCH_TIMEOUT_MS = 8_000;
-
-/** Fetch with one retry - the explorer occasionally drops requests. */
-async function fetchWithRetry(url: string): Promise<Response> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const res = await fetch(url, {
-        headers: { "User-Agent": "Givest/1.0" },
-        cache: "no-store",
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-      if (res.ok || attempt >= 1) return res;
-    } catch (e) {
-      if (attempt >= 1) throw e;
-    }
-    await new Promise((r) => setTimeout(r, 400));
-  }
-}
-
-async function fetchAddressLogs(address: Address): Promise<ExplorerLog[]> {
-  const items: ExplorerLog[] = [];
-  let params: Record<string, string | number> | null = null;
-
-  for (let page = 0; page < 25; page++) {
-    const url = new URL(`${EXPLORER}/api/v2/addresses/${address}/logs`);
-    if (params) {
-      for (const [k, v] of Object.entries(params)) {
-        url.searchParams.set(k, String(v));
-      }
-    }
-    const res = await fetchWithRetry(url.toString());
-    if (!res.ok) break;
-    const data = (await res.json()) as {
-      items?: ExplorerLog[];
-      next_page_params?: Record<string, string | number> | null;
-    };
-    const batch = data.items ?? [];
-    items.push(...batch);
-    params = data.next_page_params ?? null;
-    if (!params || batch.length === 0) break;
-  }
-
-  return items;
-}
-
-/** Sum native ETH successfully sent into an escrow contract. */
-async function fetchEthIn(address: Address): Promise<number> {
-  const url = `${EXPLORER}/api?module=account&action=txlist&address=${address}&sort=asc`;
-  const res = await fetchWithRetry(url);
-  if (!res.ok) return 0;
-  const data = (await res.json()) as {
-    result?: Array<{ value?: string; isError?: string }>;
-  };
-  let eth = 0;
-  for (const t of data.result ?? []) {
-    if (t.isError === "1") continue;
-    const v = Number(t.value || "0") / 1e18;
-    if (Number.isFinite(v) && v > 0) eth += v;
-  }
-  return eth;
-}
+type DropLog = {
+  key: string;
+  txHash: Hex;
+  token: Address;
+  shares: number;
+  ethWei: bigint;
+};
 
 export type ProtocolStats = {
-  /** Primary: USD of ETH that entered the protocol (true create volume). */
+  /** USD of ETH that entered the protocol on create. */
   volumeUsd: number;
-  /** Secondary: USD of stock tokens locked in escrow (post-swap). */
+  /** USD of stock tokens locked in escrow at the current price. */
   stockVolumeUsd: number;
   dropCount: number;
   pricedDropCount: number;
+  /** Unix ms of this read. */
+  updatedAt: number;
 };
 
-/**
- * In-memory cache with stale-while-revalidate so SSR never blocks on
- * the explorer. Fresh for 2 minutes; stale values are served instantly
- * while a background refresh runs.
- */
-const CACHE_FRESH_MS = 120_000;
+type Snapshot = {
+  at: number;
+  scannedTo: bigint;
+  logs: DropLog[];
+  stats: ProtocolStats;
+};
 
-let cached: { at: number; stats: ProtocolStats } | null = null;
-let inflight: Promise<ProtocolStats> | null = null;
+const CACHE_FRESH_MS = 12_000;
 
-function refresh(): Promise<ProtocolStats> {
-  inflight ??= computeProtocolStats()
-    .then((stats) => {
-      cached = { at: Date.now(), stats };
-      return stats;
-    })
-    .finally(() => {
-      inflight = null;
-    });
-  return inflight;
+const memory = globalThis as typeof globalThis & {
+  __givestProtocolStats?: Snapshot;
+  __givestProtocolInflight?: Promise<ProtocolStats> | null;
+};
+
+function hexToBig(hex: string | undefined): bigint {
+  if (!hex || hex === "0x") return 0n;
+  return BigInt(hex);
 }
 
-/**
- * Returns protocol stats, waiting at most `maxWaitMs` for a cold
- * computation. Pages should use a short wait and fall back to their
- * defaults; the stats API can afford to wait longer.
- */
-export async function getProtocolStats(
-  maxWaitMs = 8_000,
-): Promise<ProtocolStats> {
-  const fresh = cached && Date.now() - cached.at < CACHE_FRESH_MS;
-  const promise = fresh ? null : refresh();
+async function getLogsChunk(
+  address: Address,
+  topic: Hex,
+  fromBlock: bigint,
+  toBlock: bigint,
+): Promise<RpcLog[]> {
+  const run = () =>
+    publicClient.request({
+      method: "eth_getLogs",
+      params: [
+        {
+          address,
+          topics: [topic],
+          fromBlock: `0x${fromBlock.toString(16)}`,
+          toBlock: `0x${toBlock.toString(16)}`,
+        },
+      ],
+    }) as Promise<RpcLog[]>;
 
-  // Serve cached (possibly stale) values instantly; refresh runs in
-  // the background and updates the cache for the next request.
-  if (cached) return cached.stats;
-
-  return Promise.race([
-    promise!,
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("protocol stats timed out")),
-        maxWaitMs,
-      ),
-    ),
-  ]);
+  try {
+    return await run();
+  } catch {
+    return await run();
+  }
 }
 
-async function computeProtocolStats(): Promise<ProtocolStats> {
-  const priceCache = new Map<string, number | null>();
+/** Every DropCreated between the two blocks, across escrow versions. */
+async function fetchDropLogs(fromBlock: bigint, toBlock: bigint): Promise<RpcLog[]> {
+  if (fromBlock > toBlock) return [];
 
-  async function priceFor(token: Address): Promise<number | null> {
-    const key = token.toLowerCase();
-    if (priceCache.has(key)) return priceCache.get(key)!;
-    const stock = stockByAddress(token);
-    const feed =
-      stock?.feed ??
-      HISTORICAL_FEEDS[key] ??
-      null;
-    if (!feed) {
-      priceCache.set(key, null);
-      return null;
+  const jobs: Array<() => Promise<RpcLog[]>> = [];
+  for (const address of ESCROW_ADDRESSES) {
+    for (const topic of DROP_CREATED_TOPICS) {
+      for (let from = fromBlock; from <= toBlock; ) {
+        const to =
+          from + CHUNK_BLOCKS - 1n > toBlock ? toBlock : from + CHUNK_BLOCKS - 1n;
+        const start = from;
+        jobs.push(() => getLogsChunk(address, topic, start, to));
+        from = to + 1n;
+      }
     }
-    const p = await readUsdPrice(feed);
-    priceCache.set(key, p);
-    return p;
   }
 
-  await Promise.all(
-    STOCKS.filter((s) => s.feed).map((s) => priceFor(s.address)),
-  );
+  const logs: RpcLog[] = [];
+  for (let i = 0; i < jobs.length; i += QUERY_CONCURRENCY) {
+    const batch = await Promise.all(jobs.slice(i, i + QUERY_CONCURRENCY).map((job) => job()));
+    for (const rows of batch) logs.push(...rows);
+  }
+  return logs;
+}
 
-  const [ethUsd, ethIns, logSets] = await Promise.all([
-    readEthUsd(),
-    Promise.all(ESCROW_ADDRESSES.map((a) => fetchEthIn(a).catch(() => 0))),
-    Promise.all(
-      ESCROW_ADDRESSES.map((a) =>
-        fetchAddressLogs(a).catch(() => [] as ExplorerLog[]),
-      ),
-    ),
-  ]);
+function decodeDrop(log: RpcLog, ethByTx: Map<string, bigint>): DropLog | null {
+  const topics = log.topics ?? [];
+  const txHash = log.transactionHash;
+  if (!txHash || topics.length < 4) return null;
+  const data = (log.data ?? "0x").slice(2);
+  if (data.length < 64) return null;
+  const token = `0x${topics[3].slice(-40)}` as Address;
+  const shares = Number(formatEther(BigInt(`0x${data.slice(0, 64)}`)));
+  const key = `${txHash}:${log.logIndex ?? "0x0"}`;
+  return {
+    key,
+    txHash,
+    token,
+    shares: Number.isFinite(shares) && shares > 0 ? shares : 0,
+    ethWei: ethByTx.get(txHash.toLowerCase()) ?? 0n,
+  };
+}
 
-  const ethInTotal = ethIns.reduce((s, n) => s + n, 0);
-  const volumeUsd =
-    ethUsd && ethUsd > 0 ? ethInTotal * ethUsd : 0;
+async function ethByTransaction(hashes: Hex[]): Promise<Map<string, bigint>> {
+  const out = new Map<string, bigint>();
+  const unique = [...new Set(hashes.map((h) => h.toLowerCase() as Hex))];
+  for (let i = 0; i < unique.length; i += QUERY_CONCURRENCY) {
+    const slice = unique.slice(i, i + QUERY_CONCURRENCY);
+    const txs = await Promise.all(
+      slice.map((hash) => publicClient.getTransaction({ hash })),
+    );
+    for (const tx of txs) out.set(tx.hash.toLowerCase(), tx.value);
+  }
+  return out;
+}
+
+async function priceFor(
+  token: Address,
+  cache: Map<string, number | null>,
+): Promise<number | null> {
+  const key = token.toLowerCase();
+  if (cache.has(key)) return cache.get(key)!;
+  const stock = stockByAddress(token);
+  const feed = stock?.feed ?? HISTORICAL_FEEDS[key] ?? null;
+  if (!feed) {
+    cache.set(key, null);
+    return null;
+  }
+  const price = await readUsdPrice(feed);
+  cache.set(key, price);
+  return price;
+}
+
+async function buildStats(logs: DropLog[], previous: ProtocolStats | null): Promise<ProtocolStats> {
+  const priceCache = new Map<string, number | null>();
+  await Promise.all(STOCKS.filter((s) => s.feed).map((s) => priceFor(s.address, priceCache)));
 
   let stockVolumeUsd = 0;
-  let dropCount = 0;
   let pricedDropCount = 0;
+  let ethWei = 0n;
+  const seenTx = new Set<string>();
 
-  for (const logs of logSets) {
-    for (const lg of logs) {
-      const topics = lg.topics ?? [];
-      if (!isDropCreated(topics[0])) continue;
-      dropCount += 1;
-      if (topics.length < 4) continue;
-      const token = (`0x${topics[3].slice(-40)}`) as Address;
-      const data = (lg.data ?? "0x").slice(2);
-      if (data.length < 64) continue;
-      const amount = BigInt(`0x${data.slice(0, 64)}`);
-      const shares = Number(formatEther(amount));
-      if (!Number.isFinite(shares) || shares <= 0) continue;
-      const price = await priceFor(token);
-      if (price === null) continue;
-      stockVolumeUsd += shares * price;
-      pricedDropCount += 1;
+  for (const log of logs) {
+    const tx = log.txHash.toLowerCase();
+    if (!seenTx.has(tx)) {
+      seenTx.add(tx);
+      ethWei += log.ethWei;
     }
+    if (log.shares <= 0) continue;
+    const price = await priceFor(log.token, priceCache);
+    if (price === null) continue;
+    stockVolumeUsd += log.shares * price;
+    pricedDropCount += 1;
   }
 
-  // The protocol has live drops, so an all-zero result can only mean
-  // every explorer call failed. Throw instead of poisoning the cache -
-  // the last good stats keep being served while we retry.
-  if (dropCount === 0 && ethInTotal === 0) {
-    throw new Error("explorer returned no data for any escrow");
+  const ethUsd = await readEthUsd();
+  const eth = Number(formatEther(ethWei));
+  const volumeUsd =
+    ethUsd && ethUsd > 0
+      ? eth * ethUsd
+      : (previous?.volumeUsd ?? 0);
+
+  if (logs.length === 0) {
+    throw new Error("chain returned no drops");
+  }
+  if ((!ethUsd || ethUsd <= 0) && !previous) {
+    throw new Error("eth price unavailable");
   }
 
   return {
     volumeUsd,
     stockVolumeUsd,
-    dropCount,
+    dropCount: logs.length,
     pricedDropCount,
+    updatedAt: Date.now(),
   };
+}
+
+async function computeProtocolStats(): Promise<ProtocolStats> {
+  const previous = memory.__givestProtocolStats ?? null;
+  const latest = await publicClient.getBlockNumber();
+  const from = previous ? previous.scannedTo + 1n : SCAN_FROM_BLOCK;
+  const freshLogs = await fetchDropLogs(from, latest);
+
+  const known = new Set((previous?.logs ?? []).map((l) => l.key));
+  const unseen = freshLogs.filter((l) => {
+    const key = `${l.transactionHash}:${l.logIndex ?? "0x0"}`;
+    return l.transactionHash && !known.has(key);
+  });
+  const ethByTx = await ethByTransaction(
+    unseen.map((l) => l.transactionHash).filter((h): h is Hex => Boolean(h)),
+  );
+
+  const decoded = unseen
+    .map((l) => decodeDrop(l, ethByTx))
+    .filter((l): l is DropLog => l !== null);
+
+  const logs = [...(previous?.logs ?? []), ...decoded];
+  const stats = await buildStats(logs, previous?.stats ?? null);
+
+  memory.__givestProtocolStats = {
+    at: Date.now(),
+    scannedTo: latest,
+    logs,
+    stats,
+  };
+  return stats;
+}
+
+function refresh(): Promise<ProtocolStats> {
+  memory.__givestProtocolInflight ??= computeProtocolStats()
+    .finally(() => {
+      memory.__givestProtocolInflight = null;
+    });
+  return memory.__givestProtocolInflight;
+}
+
+/**
+ * Reads the chain at least every few seconds.
+ * A failed or slow read keeps the last good numbers. It never becomes $0.
+ */
+export async function getProtocolStats(maxWaitMs = 8_000): Promise<ProtocolStats> {
+  const snap = memory.__givestProtocolStats;
+  const fresh = snap && Date.now() - snap.at < CACHE_FRESH_MS;
+  if (fresh) return snap.stats;
+
+  const promise = refresh();
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("protocol stats timed out")), maxWaitMs),
+      ),
+    ]);
+  } catch (e) {
+    if (snap) return snap.stats;
+    throw e;
+  }
 }
 
 export function formatVolumeUsd(n: number): string {
