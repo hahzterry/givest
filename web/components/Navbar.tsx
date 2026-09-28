@@ -108,7 +108,15 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
           <span className="text-[15px] font-medium tracking-tight">Givest</span>
         </Link>
 
-        <div className="hidden items-center gap-1 md:flex">
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          <Link
+            href="/send"
+            className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+              sendOn ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }`}
+          >
+            Send
+          </Link>
           <Link
             href="/claim"
             className={`rounded-full px-3 py-1.5 text-sm font-medium ${
@@ -117,18 +125,19 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
           >
             Claim
           </Link>
-          <div>
-            <button
-              type="button"
-              aria-expanded={board}
-              onClick={() => setBoard((v) => !v)}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                board ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-              }`}
-            >
-              Board
-            </button>
-          </div>
+          <button
+            type="button"
+            aria-expanded={board}
+            onClick={() => {
+              if (window.matchMedia("(max-width: 767px)").matches) setOpen(true);
+              else setBoard((v) => !v);
+            }}
+            className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+              board ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }`}
+          >
+            Board
+          </button>
         </div>
 
         <Link
@@ -144,16 +153,24 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
           </span>
         </Link>
 
-        <Link
-          href="/send"
-          className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap ${
-            sendOn
-              ? "bg-gray-900 text-white"
-              : "bg-gray-900 text-white hover:bg-gray-800"
-          }`}
+        <a
+          href="https://x.com/usegivest"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Givest on X"
+          className="hidden text-gray-500 hover:text-gray-900 sm:block"
         >
-          Send
-        </Link>
+          <XIcon />
+        </a>
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Source on GitHub"
+          className="mr-1 hidden text-gray-500 hover:text-gray-900 sm:block"
+        >
+          <GitHubIcon />
+        </a>
 
         <button
           type="button"
@@ -186,13 +203,21 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
                   {stats.ready ? stats.volumeLabel : "…"}
                 </p>
               </div>
-              <Link href="/send" onClick={() => setOpen(false)} className="rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white">
+              <div className="flex items-center gap-4">
+                <a href="https://x.com/usegivest" target="_blank" rel="noopener noreferrer" aria-label="Givest on X" className="text-gray-500">
+                  <XIcon />
+                </a>
+                <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub" className="text-gray-500">
+                  <GitHubIcon />
+                </a>
+              </div>
+            </div>
+            <div className="grid gap-1 p-3">
+              <Link href="/send" onClick={() => setOpen(false)} className="rounded-2xl px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50">
                 Send
               </Link>
-            </div>
-            <div className="grid gap-4 p-3">
-              <Link href="/claim" onClick={() => setOpen(false)} className="rounded-2xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-900">
-                Claim a gift
+              <Link href="/claim" onClick={() => setOpen(false)} className="rounded-2xl px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50">
+                Claim
               </Link>
               {BOARD.map((group) => (
                 <div key={group.label} className="px-2">
@@ -262,15 +287,6 @@ function BoardPanel({
             </div>
           ))}
         </div>
-      </div>
-      <div className="flex items-center gap-4 border-t border-gray-100 px-4 py-2.5">
-        <a href="https://x.com/usegivest" target="_blank" rel="noopener noreferrer" aria-label="Givest on X" className="text-gray-400 hover:text-gray-900">
-          <XIcon />
-        </a>
-        <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub" className="text-gray-400 hover:text-gray-900">
-          <GitHubIcon />
-        </a>
-        <span className="ml-auto text-[11px] text-gray-400">Send stays one screen. This is the rest.</span>
       </div>
     </div>
   );
