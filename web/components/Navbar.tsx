@@ -1,15 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import LogoMark from "@/components/LogoMark";
+import { useLiveStats } from "@/lib/useLiveStats";
 
-const PRIMARY = [
-  { label: "Send", href: "/send" },
-  { label: "Claim", href: "/claim" },
-];
+const GITHUB_URL = "https://github.com/usegivest/givest";
+
+const BOARD = [
+  {
+    label: "Move",
+    items: [
+      { href: "/pool", title: "Pool", fact: "Several wallets fund one gift." },
+      { href: "/x", title: "From X", fact: "Paste a post. We read who, what, and how much." },
+      { href: "/gifts", title: "Your gifts", fact: "What this wallet has sent." },
+      { href: "/status", title: "One gift", fact: "Paste a link. The chain answers." },
+    ],
+  },
+  {
+    label: "Record",
+    items: [
+      { href: "/volume", title: "Volume", fact: "ETH that entered the contracts." },
+      { href: "/updates", title: "Updates", fact: "What shipped, with a date." },
+      { href: "/docs", title: "How it works", fact: "Escrow, the claim key, gas." },
+      { href: "/token", title: "Token", fact: "Hold $GIVEST. The fee drops." },
+      { href: "/android", title: "Android", fact: "The APK is live. iPhone is not." },
+    ],
+  },
+] as const;
 
 function XIcon({ className }: { className?: string }) {
   return (
@@ -27,15 +47,22 @@ function GitHubIcon({ className }: { className?: string }) {
   );
 }
 
-const GITHUB_URL = "https://github.com/usegivest/givest";
-
 export default function Navbar({ variant = "floating" }: { variant?: "floating" | "page" }) {
   const pathname = usePathname();
   const isPage = variant === "page";
   const [open, setOpen] = useState(false);
+  const [board, setBoard] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const stats = useLiveStats({
+    volumeLabel: "…",
+    stockVolumeLabel: "…",
+    dropCount: 0,
+    ready: false,
+  });
 
   useEffect(() => {
     setOpen(false);
+    setBoard(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -47,64 +74,85 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
     };
   }, [open]);
 
-  const isActive = (href: string) =>
-    href === "/"
-      ? pathname === "/"
-      : href.startsWith("/") && !href.includes("#")
-        ? pathname === href
-        : false;
+  useEffect(() => {
+    if (!board) return;
+    function onPointer(e: MouseEvent) {
+      if (boardRef.current && !boardRef.current.contains(e.target as Node)) setBoard(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setBoard(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [board]);
+
+  const claimOn = pathname === "/claim";
+  const sendOn = pathname === "/send";
 
   return (
     <nav
       className={
         isPage
-          ? "sticky top-0 z-50 flex justify-center bg-[#f4f3ef]/95 px-4 py-4 backdrop-blur-md sm:px-6"
-          : "fixed top-0 right-0 left-0 z-50 flex justify-center px-4 pt-5 sm:px-6 sm:pt-6"
+          ? "sticky top-0 z-50 bg-[#f4f3ef]/90 px-4 py-3 backdrop-blur-md sm:px-6"
+          : "fixed top-0 right-0 left-0 z-50 px-4 pt-4 sm:px-6 sm:pt-5"
       }
     >
-      <div className="flex w-full max-w-fit items-center gap-3 rounded-full border border-gray-200/80 bg-white/70 py-2.5 pr-2.5 pl-4 shadow-sm backdrop-blur-sm md:gap-7 md:pr-2.5 md:pl-5">
-        <Link href="/" className="text-gray-900" aria-label="Givest home">
-          <LogoMark size={28} />
+      <div ref={boardRef} className="relative mx-auto w-full max-w-5xl">
+      <div className="flex w-full items-center gap-3 rounded-full border border-gray-200/80 bg-white/80 py-2 pr-2 pl-3 shadow-sm backdrop-blur-md sm:gap-4 sm:pl-4">
+        <Link href="/" className="flex items-center gap-2 text-gray-900" aria-label="Givest home">
+          <LogoMark size={26} />
+          <span className="text-[15px] font-medium tracking-tight">Givest</span>
         </Link>
 
-        <div className="hidden items-center gap-6 md:flex">
-          {PRIMARY.map(({ label, href }) => (
-            <Link
-              key={label}
-              href={href}
-              className={`text-sm font-medium transition-colors duration-150 ${
-                isActive(href) ? "text-gray-900" : "text-gray-600 hover:text-gray-900"
+        <div className="hidden items-center gap-1 md:flex">
+          <Link
+            href="/claim"
+            className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+              claimOn ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }`}
+          >
+            Claim
+          </Link>
+          <div>
+            <button
+              type="button"
+              aria-expanded={board}
+              onClick={() => setBoard((v) => !v)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                board ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               }`}
             >
-              {label}
-            </Link>
-          ))}
-
-          <a
-            href="https://x.com/usegivest"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Follow us on X"
-            className="text-gray-500 transition-colors hover:text-gray-900"
-          >
-            <XIcon />
-          </a>
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="View the source on GitHub"
-            className="text-gray-500 transition-colors hover:text-gray-900"
-          >
-            <GitHubIcon />
-          </a>
+              Board
+            </button>
+          </div>
         </div>
 
         <Link
-          href="/send"
-          className="gradient-border-btn rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap text-gray-900 shadow-sm hover:bg-gray-50 sm:px-5"
+          href="/volume"
+          className="ml-auto hidden items-baseline gap-2 rounded-full px-3 py-1.5 hover:bg-gray-50 sm:flex"
         >
-          Get started
+          <span className="text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">Onchain</span>
+          <span className="text-sm font-medium tracking-tight text-gray-900">
+            {stats.ready ? stats.volumeLabel : "…"}
+          </span>
+          <span className="text-xs text-gray-400">
+            {stats.ready ? `${stats.dropCount} drops` : ""}
+          </span>
+        </Link>
+
+        <Link
+          href="/send"
+          className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap ${
+            sendOn
+              ? "bg-gray-900 text-white"
+              : "bg-gray-900 text-white hover:bg-gray-800"
+          }`}
+        >
+          Send
         </Link>
 
         <button
@@ -112,67 +160,118 @@ export default function Navbar({ variant = "floating" }: { variant?: "floating" 
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 md:hidden"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 md:hidden"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
+      {board && (
+        <div className="absolute top-full right-0 left-0 z-50 mt-3 hidden md:block">
+          <BoardPanel stats={stats} onNavigate={() => setBoard(false)} />
+        </div>
+      )}
+      </div>
 
       {open && (
         <div className="fixed inset-0 z-40 md:hidden" onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 bg-gray-900/20 backdrop-blur-[2px]" />
+          <div className="absolute inset-0 bg-gray-900/25 backdrop-blur-[2px]" />
           <div
-            className="pop-in absolute top-20 right-4 left-4 overflow-hidden rounded-3xl border border-gray-200/80 bg-white/95 shadow-2xl backdrop-blur-md"
+            className="pop-in absolute top-[4.5rem] right-4 left-4 max-h-[80vh] overflow-auto rounded-[28px] border border-gray-200/80 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-col p-2">
-              {PRIMARY.map(({ label, href }) => (
-                <Link
-                  key={label}
-                  href={href}
-                  onClick={() => setOpen(false)}
-                  className={`rounded-2xl px-4 py-3.5 text-base font-medium transition ${
-                    isActive(href)
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  {label}
-                </Link>
-              ))}
-            </div>
-            <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4">
-              <div className="flex items-center gap-5">
-                <a
-                  href="https://x.com/usegivest"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Follow us on X"
-                  className="flex items-center gap-2 text-sm font-medium text-gray-600"
-                >
-                  <XIcon />
-                </a>
-                <a
-                  href={GITHUB_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="View the source on GitHub"
-                  className="flex items-center gap-2 text-sm font-medium text-gray-600"
-                >
-                  <GitHubIcon />
-                </a>
+            <div className="flex items-end justify-between border-b border-gray-100 px-5 py-4">
+              <div>
+                <p className="text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">Onchain</p>
+                <p className="mt-1 text-2xl font-medium tracking-tight text-gray-900">
+                  {stats.ready ? stats.volumeLabel : "…"}
+                </p>
               </div>
-              <Link
-                href="/send"
-                onClick={() => setOpen(false)}
-                className="gradient-border-btn rounded-full px-5 py-2 text-sm font-semibold text-gray-900 shadow-sm"
-              >
-                Get started
+              <Link href="/send" onClick={() => setOpen(false)} className="rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white">
+                Send
               </Link>
+            </div>
+            <div className="grid gap-4 p-3">
+              <Link href="/claim" onClick={() => setOpen(false)} className="rounded-2xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-900">
+                Claim a gift
+              </Link>
+              {BOARD.map((group) => (
+                <div key={group.label} className="px-2">
+                  <p className="px-2 text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">{group.label}</p>
+                  {group.items.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className="block rounded-xl px-2 py-2.5 hover:bg-gray-50"
+                    >
+                      <span className="block text-sm font-medium text-gray-900">{item.title}</span>
+                      <span className="mt-0.5 block text-xs text-gray-500">{item.fact}</span>
+                    </Link>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
     </nav>
+  );
+}
+
+function BoardPanel({
+  stats,
+  onNavigate,
+}: {
+  stats: { volumeLabel: string; stockVolumeLabel: string; dropCount: number; ready: boolean };
+  onNavigate: () => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-[28px] border border-gray-200/80 bg-white shadow-2xl">
+      <div className="grid grid-cols-[210px_1fr]">
+        <Link href="/volume" onClick={onNavigate} className="flex flex-col justify-between bg-[#17191f] px-5 py-5 text-white">
+          <div>
+            <p className="text-[10px] font-semibold tracking-[0.18em] text-white/50 uppercase">Onchain</p>
+            <p className="mt-3 text-3xl font-medium tracking-tight">
+              {stats.ready ? stats.volumeLabel : "…"}
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-white/60">
+              {stats.ready
+                ? `${stats.dropCount} drops · ${stats.stockVolumeLabel} stock locked`
+                : "Reading Robinhood Chain"}
+            </p>
+          </div>
+          <p className="mt-8 text-xs font-medium text-white/80">Open the ledger</p>
+        </Link>
+        <div className="grid grid-cols-2 gap-x-2 p-3">
+          {BOARD.map((group) => (
+            <div key={group.label}>
+              <p className="px-2.5 pt-1 pb-1 text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">
+                {group.label}
+              </p>
+              {group.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  className="block rounded-xl px-2.5 py-2 hover:bg-gray-50"
+                >
+                  <span className="block text-sm font-medium text-gray-900">{item.title}</span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-gray-500">{item.fact}</span>
+                </Link>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-4 border-t border-gray-100 px-4 py-2.5">
+        <a href="https://x.com/usegivest" target="_blank" rel="noopener noreferrer" aria-label="Givest on X" className="text-gray-400 hover:text-gray-900">
+          <XIcon />
+        </a>
+        <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub" className="text-gray-400 hover:text-gray-900">
+          <GitHubIcon />
+        </a>
+        <span className="ml-auto text-[11px] text-gray-400">Send stays one screen. This is the rest.</span>
+      </div>
+    </div>
   );
 }

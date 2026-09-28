@@ -106,10 +106,21 @@ export default function Hero({
       </h1>
 
       <p className="mt-8 max-w-sm text-base leading-relaxed text-gray-500">
-        Send real stock tokens as a link on Robinhood Chain.
-        <br />
-        Claimed in one click, no wallet, no gas.
+        A stock, a dollar amount, a link. They claim it. You paid the gas.
       </p>
+
+      <div className="mt-8 grid w-full max-w-xl grid-cols-2 gap-3 text-left">
+        <a href="/send" className="rounded-[24px] bg-gray-900 px-5 py-5 text-white shadow-lg transition hover:bg-gray-800">
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-white/50 uppercase">Send</p>
+          <p className="mt-3 text-xl font-medium tracking-tight">Pick a stock.</p>
+          <p className="mt-1 text-sm leading-snug text-white/70">$10, or any amount. You get a private link.</p>
+        </a>
+        <a href="/claim" className="rounded-[24px] border border-gray-200/80 bg-white/85 px-5 py-5 text-gray-900 shadow-sm backdrop-blur-sm transition hover:border-gray-300">
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-gray-400 uppercase">Claim</p>
+          <p className="mt-3 text-xl font-medium tracking-tight">Open the link.</p>
+          <p className="mt-1 text-sm leading-snug text-gray-500">One tap. No gas. No wallet setup first.</p>
+        </a>
+      </div>
 
       <LiveNumbers
         volumeLabel={volumeLabel}
